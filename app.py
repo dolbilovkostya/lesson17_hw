@@ -39,7 +39,7 @@ class Director(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255))
 
-class DirecorSchema(Schema):
+class DirectorSchema(Schema):
     id = fields.Int(dump_only=True)
     name = fields.Str()
 
@@ -53,33 +53,121 @@ class GenreSchema(Schema):
     name = fields.Str()
 
 
+api = Api(app)
+movie_ns = api.namespace('movies')
+director_ns = api.namespace('directors')
+genre_ns = api.namespace('genres')
+
 movie_schema = MovieSchema()
 movies_schema = MovieSchema(many=True)
 
-api = Api(app)
-movie_ns = api.namespace('movies')
+director_schema = DirectorSchema()
+directors_schema = DirectorSchema(many=True)
+
+genre_schema = GenreSchema()
+genres_schema = GenreSchema(many=True)
+
 
 @movie_ns.route('/')
 class MoviesView(Resource):
     def get(self):
-        director_id = request.args['director_id']
-        all_movies = Movie.query.all()
-        movies = movies_schema.dump(all_movies)
-        director_movies = []
-        for movie in movies:
-            if director_id == movie["director_id"]:
-                director_movies.append(movie)
-            return movies_schema.dump(director_movies), 200
-        # for item in all_movies:
-        #     if director_id in item["director_id"]:
-        #         return movie_schema.dump(item), 200
-        return movies_schema.dump(all_movies), 200
+        all_movies = db.session.query(Movie)
+
+        director_id = request.args.get("director_id")
+        if director_id is not None:
+            all_movies = all_movies.filter(Movie.director_id == director_id)
+
+        genre_id = request.args.get("genre_id")
+        if genre_id is not None:
+            all_movies = all_movies.filter(Movie.genre_id == genre_id)
+
+        return movies_schema.dump(all_movies.all()), 200
+
+    def post(self):
+        req_json = request.json
+        new_movie = Movie(**req_json)
+
+        with db.session.begin():
+            db.session.add(new_movie)
+
+        return "Movie created", 201
 
 @movie_ns.route('/<int:id>')
 class MovieView(Resource):
-    def get(self, id):
+    def get(self, id: int):
         movie = Movie.query.get(id)
+
+        if not movie:
+            return "Movie not found", 404
+
         return movie_schema.dump(movie), 200
+
+    def put(self, id: int):
+        updated_movie = db.session.query(Movie).filter(Movie.id == id).update(request.json)
+
+        if updated_movie != 1:
+            return "Movie not updated", 400
+
+        db.session.commit()
+
+        return "Updated", 204
+
+    def delete(self, id: int):
+        movie = Movie.query.get(id)
+
+        if not movie:
+            return "Movie not found", 404
+
+        db.session.delete(movie)
+        db.session.commit()
+
+        return "Movie deleted", 204
+
+
+@director_ns.route('/')
+class DirectorView(Resource):
+    def get(self):
+        all_directors = db.session.query(Director)
+        return directors_schema.dump(all_directors), 200
+
+    def post(self):
+        req_json = request.json
+
+        new_director = Director(**req_json)
+
+        with db.session.begin():
+            db.session.add(new_director)
+
+        return "Director added", 201
+
+@director_ns.route('/<int:id')
+class DirectorView(Resource):
+    def get(self, id: int):
+        try:
+            director = db.session.query(Director).get(id)
+            return director_schema.dump(director), 200
+
+        except Exception:
+            return str(Exception), 404
+
+    def put(self, id: int):
+        director = Director.query.get(id)
+        req_json = request.json
+        if "name" in req_json:
+            director.name = req_json.get("name")
+        db.session.add(director)
+        db.session.commit()
+
+    def delete(self, id: int):
+        director = Director.query.get(id)
+
+        if not director:
+            return "Director not found", 404
+
+        db.session.delete(director)
+        db.session.commit()
+
+        return "Director deleted", 204
 
 
 if __name__ == '__main__':
