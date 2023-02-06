@@ -5,6 +5,7 @@ from flask_restx import Api, Resource
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema, fields
 
+
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -125,7 +126,7 @@ class MovieView(Resource):
 
 
 @director_ns.route('/')
-class DirectorView(Resource):
+class DirectorsView(Resource):
     def get(self):
         all_directors = db.session.query(Director)
         return directors_schema.dump(all_directors), 200
@@ -140,7 +141,7 @@ class DirectorView(Resource):
 
         return "Director added", 201
 
-@director_ns.route('/<int:id')
+@director_ns.route('/<int:id>')
 class DirectorView(Resource):
     def get(self, id: int):
         try:
@@ -168,6 +169,52 @@ class DirectorView(Resource):
         db.session.commit()
 
         return "Director deleted", 204
+
+
+@genre_ns.route('/')
+class GenresView(Resource):
+    def get(self):
+        all_genres = db.session.query(Genre)
+        return genres_schema.dump(all_genres), 200
+
+    def post(self):
+        req_json = request.json
+
+        new_genre = Director(**req_json)
+
+        with db.session.begin():
+            db.session.add(new_genre)
+
+        return "Genre added", 201
+
+@genre_ns.route('/<int:id>')
+class GenreView(Resource):
+    def get(self, id: int):
+        try:
+            genre = db.session.query(Genre).get(id)
+            return genre_schema.dump(genre), 200
+
+        except Exception:
+            return str(Exception), 404
+
+    def put(self, id: int):
+        genre = Genre.query.get(id)
+        req_json = request.json
+        if "name" in req_json:
+            genre.name = req_json.get("name")
+        db.session.add(genre)
+        db.session.commit()
+
+    def delete(self, id: int):
+        genre = Genre.query.get(id)
+
+        if not genre:
+            return "Genre not found", 404
+
+        db.session.delete(genre)
+        db.session.commit()
+
+        return "Genre deleted", 204
 
 
 if __name__ == '__main__':
